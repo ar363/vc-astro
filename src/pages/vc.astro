@@ -1,0 +1,79 @@
+---
+import Inp from "../components/Inp.svelte";
+import MessageList from "../components/MessageList.svelte";
+---
+
+<h1>VC</h1>
+<Inp client:load />
+<MessageList client:load />
+
+<div id="vidcont"></div>
+
+<script>
+  import { joinRoom } from "trystero/firebase";
+  import type { Room } from "trystero";
+
+  import { fns, messages } from "../vcStore";
+
+  const room: Room = joinRoom(
+    {
+      appId:
+        "https://vidc-a920a-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    },
+    "test"
+  );
+
+  console.log(room);
+
+  room.onPeerJoin((peerId) => {
+    console.log(`${peerId} joined`);
+  });
+
+  room.onPeerLeave((peerId) => {
+    console.log(`${peerId} left`);
+  });
+
+  const [sendMessage, getMessage] = room.makeAction("message");
+
+  fns.set({
+    room,
+    sendMessage,
+  });
+
+  getMessage((data: string, peerId) => {
+    messages.set([
+      ...messages.get(),
+      {
+        from: peerId,
+        msg: data,
+      },
+    ]);
+
+    console.log(`got a message: ${data} ; from ${peerId}`);
+  });
+
+  const selfStream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: true,
+  });
+
+  const peerVideos = {};
+
+  room.addStream(selfStream);
+
+  room.onPeerJoin((peerId) => room.addStream(selfStream, peerId));
+
+  room.onPeerStream((stream, peerId) => {
+    let video = peerVideos[peerId];
+
+    if (!video) {
+      const video = document.createElement("video");
+
+      console.log(document.getElementById("vidcont"));
+      document.getElementById("vidcont").appendChild(video);
+      video.autoplay = true;
+      video.srcObject = stream;
+    }
+    peerVideos[peerId] = video;
+  });
+</script>
